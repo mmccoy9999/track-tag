@@ -1145,6 +1145,7 @@ let players = [];       // { name, strikes, eliminated }
 let currentDjIndex = 0;
 let activePlayerIndex = 0;
 let turnsThisRound = 0;
+let turnsPerRound = 0;
 let currentCategory = '';
 let roundNumber = 1;
 let totalRounds = 0;
@@ -1489,10 +1490,8 @@ function updateTimerUI() {
 
 function advanceActivePlayer() {
   turnsThisRound++;
-  const djIdx = activeDjIndex();
-  const activeNonDjCount = players.filter(p => !p.eliminated).length;
 
-  if (turnsThisRound >= activeNonDjCount) {
+  if (turnsThisRound >= turnsPerRound) {
     // everyone has gone — end round automatically
     endRound();
     return;
@@ -1539,6 +1538,7 @@ function selectCategory(cat) {
   // DJ goes first
   activePlayerIndex = activeDjIndex();
   turnsThisRound = 0;
+  turnsPerRound = players.filter(p => !p.eliminated).length;
   renderGame();
   startTimer();
 }

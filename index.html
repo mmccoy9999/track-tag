@@ -894,7 +894,6 @@
       <button class="btn-challenge" id="challengeBtn">⚡ Challenge</button>
       <button class="btn-next" id="namedItBtn">Named It ✓</button>
     </div>
-    <button class="btn-end-round" id="nextBtn">End Round →</button>
   </div>
 </div>
 
@@ -1133,6 +1132,7 @@ const CATEGORIES = [
 let players = [];       // { name, strikes, eliminated }
 let currentDjIndex = 0;
 let activePlayerIndex = 0;
+let turnsThisRound = 0;
 let currentCategory = '';
 let roundNumber = 1;
 let totalRounds = 0;
@@ -1274,32 +1274,7 @@ namedItBtn.addEventListener('click', () => {
   advanceActivePlayer();
 });
 
-nextBtn.addEventListener('click', () => {
-  if (!currentCategory) {
-    showToast('Pick a category first!');
-    return;
-  }
-  resetTimer();
-  // advance to next non-eliminated DJ
-  currentCategory = '';
-  currentDjIndex++;
-  roundNumber++;
-
-  const activePlayers = players.filter(p => !p.eliminated);
-  if (roundNumber > totalRounds || activePlayers.length <= 1) {
-    showEndScreen();
-    return;
-  }
-
-  // skip eliminated
-  let attempts = 0;
-  while (players[currentDjIndex % players.length].eliminated && attempts < players.length) {
-    currentDjIndex++;
-    attempts++;
-  }
-
-  renderGame();
-});
+const nextBtn = document.getElementById('nextBtn'); // kept for reset logic reference
 
 const confirmModal = document.getElementById('confirmModal');
 resetBtn.addEventListener('click', () => confirmModal.classList.add('open'));
@@ -1310,6 +1285,8 @@ document.getElementById('confirmYes').addEventListener('click', () => {
   resetTimer();
   players.forEach(p => { p.strikes = 0; p.eliminated = false; });
   currentDjIndex = 0;
+  activePlayerIndex = 0;
+  turnsThisRound = 0;
   roundNumber = 1;
   currentCategory = '';
   usedCategoryIndices.clear();
@@ -1434,16 +1411,47 @@ function updateTimerUI() {
 }
 
 function advanceActivePlayer() {
+  turnsThisRound++;
+  const djIdx = activeDjIndex();
+  const activeNonDjCount = players.filter((p, i) => !p.eliminated && i !== djIdx).length;
+
+  if (turnsThisRound >= activeNonDjCount) {
+    // everyone has gone — end round automatically
+    endRound();
+    return;
+  }
+
   const total = players.length;
   let next = (activePlayerIndex + 1) % total;
   let attempts = 0;
-  while (players[next].eliminated && attempts < total) {
+  while ((players[next].eliminated || next === djIdx) && attempts < total) {
     next = (next + 1) % total;
     attempts++;
   }
   activePlayerIndex = next;
   renderGame();
   startTimer();
+}
+
+function endRound() {
+  resetTimer();
+  currentCategory = '';
+  currentDjIndex++;
+  roundNumber++;
+  turnsThisRound = 0;
+
+  const activePlayers = players.filter(p => !p.eliminated);
+  if (roundNumber > totalRounds || activePlayers.length <= 1) {
+    showEndScreen();
+    return;
+  }
+
+  let attempts = 0;
+  while (players[currentDjIndex % players.length].eliminated && attempts < players.length) {
+    currentDjIndex++;
+    attempts++;
+  }
+  renderGame();
 }
 
 function selectCategory(cat) {
@@ -1458,6 +1466,7 @@ function selectCategory(cat) {
     attempts++;
   }
   activePlayerIndex = first;
+  turnsThisRound = 0;
   renderGame();
   startTimer();
 }

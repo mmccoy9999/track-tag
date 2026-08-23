@@ -1479,7 +1479,7 @@ function updateTimerUI() {
 function advanceActivePlayer() {
   turnsThisRound++;
   const djIdx = activeDjIndex();
-  const activeNonDjCount = players.filter((p, i) => !p.eliminated && i !== djIdx).length;
+  const activeNonDjCount = players.filter(p => !p.eliminated).length;
 
   if (turnsThisRound >= activeNonDjCount) {
     // everyone has gone — end round automatically
@@ -1490,7 +1490,7 @@ function advanceActivePlayer() {
   const total = players.length;
   let next = (activePlayerIndex + 1) % total;
   let attempts = 0;
-  while ((players[next].eliminated || next === djIdx) && attempts < total) {
+  while (players[next].eliminated && attempts < total) {
     next = (next + 1) % total;
     attempts++;
   }
@@ -1523,15 +1523,8 @@ function endRound() {
 function selectCategory(cat) {
   currentCategory = cat;
   categoryModal.classList.remove('open');
-  // start from player after DJ
-  const djIdx = activeDjIndex();
-  let first = (djIdx + 1) % players.length;
-  let attempts = 0;
-  while (players[first].eliminated && attempts < players.length) {
-    first = (first + 1) % players.length;
-    attempts++;
-  }
-  activePlayerIndex = first;
+  // DJ goes first
+  activePlayerIndex = activeDjIndex();
   turnsThisRound = 0;
   renderGame();
   startTimer();

@@ -453,6 +453,17 @@
   .timer-bar {
     margin: 0 20px;
     flex-shrink: 0;
+    cursor: pointer;
+    user-select: none;
+  }
+  .timer-bar.paused .timer-fill { background: var(--text-muted); }
+  .timer-bar.paused .timer-number { color: var(--text-muted); }
+  .timer-paused-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--text-muted);
   }
   .timer-display {
     display: flex;
@@ -876,7 +887,7 @@
 
   <div class="timer-bar" id="timerBar" style="display:none">
     <div class="timer-display">
-      <span class="timer-label">⏱ Time</span>
+      <span class="timer-label" id="timerLabel">⏱ Time</span>
       <span class="timer-number" id="timerNumber">30</span>
     </div>
     <div class="timer-track">
@@ -1271,6 +1282,7 @@ namedItBtn.addEventListener('click', () => {
     showToast('Pick a category first!');
     return;
   }
+  if (audioCtx.state === 'suspended') audioCtx.resume();
   advanceActivePlayer();
 });
 
@@ -1352,38 +1364,83 @@ function openCategoryModal() {
   categoryModal.classList.add('open');
 }
 
+// ── Audio ──
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+function playTick() {
+  const o = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  o.connect(g); g.connect(audioCtx.destination);
+  o.frequency.value = 880;
+  g.gain.setValueAtTime(0.3, audioCtx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.08);
+  o.start(); o.stop(audioCtx.currentTime + 0.08);
+}
+
+function playBuzzer() {
+  const o = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  o.connect(g); g.connect(audioCtx.destination);
+  o.type = 'sawtooth';
+  o.frequency.setValueAtTime(160, audioCtx.currentTime);
+  o.frequency.exponentialRampToValueAtTime(60, audioCtx.currentTime + 0.5);
+  g.gain.setValueAtTime(0.5, audioCtx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.5);
+  o.start(); o.stop(audioCtx.currentTime + 0.5);
+}
+
+function playChallengeBuzzer() {
+  [0, 0.18, 0.36].forEach(delay => {
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.connect(g); g.connect(audioCtx.destination);
+    o.type = 'square';
+    o.frequency.value = 220;
+    g.gain.setValueAtTime(0.4, audioCtx.currentTime + delay);
+    g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + delay + 0.15);
+    o.start(audioCtx.currentTime + delay);
+    o.stop(audioCtx.currentTime + delay + 0.15);
+  });
+}
+
 // ── Timer ──
 const TIMER_SECONDS = 30;
 let selectedTimerSeconds = 60;
 let timerInterval = null;
 let timerRemaining = TIMER_SECONDS;
+let timerPaused = false;
 const timerBar    = document.getElementById('timerBar');
+timerBar.addEventListener('click', () => { if (audioCtx.state === 'suspended') audioCtx.resume(); togglePause(); });
 const timerNumber = document.getElementById('timerNumber');
 const timerFill   = document.getElementById('timerFill');
 
 function startTimer() {
   if (selectedTimerSeconds === 0) return;
   stopTimer();
+  timerPaused = false;
   timerRemaining = selectedTimerSeconds;
   timerBar.style.display = 'block';
+  timerBar.classList.remove('paused');
   updateTimerUI();
   timerInterval = setInterval(() => {
+    if (timerPaused) return;
     timerRemaining--;
+    if (timerRemaining <= 5 && timerRemaining > 0) playTick();
     if (timerRemaining <= 0) {
       timerRemaining = 0;
       updateTimerUI();
       stopTimer();
-      // auto-strike the active player
+      playBuzzer();
       const p = players[activePlayerIndex];
       if (p && !p.eliminated) {
         p.strikes++;
-        showToast(`⏱ Time's up! Strike for ${p.name}`);
+        showToast(`⏱ Time\'s up! Strike for ${p.name}`);
         if (p.strikes >= 3) {
           p.eliminated = true;
-          showToast(`${p.name} is eliminated!`);
+          setTimeout(() => showToast(`${p.name} is eliminated!`), 2400);
         }
       }
-      advanceActivePlayer();
+      setTimeout(advanceActivePlayer, 1200);
     } else {
       updateTimerUI();
     }
@@ -1397,13 +1454,22 @@ function stopTimer() {
 
 function resetTimer() {
   stopTimer();
+  timerPaused = false;
   timerBar.style.display = 'none';
-  timerRemaining = TIMER_SECONDS;
+  timerBar.classList.remove('paused');
+  timerRemaining = selectedTimerSeconds;
+}
+
+function togglePause() {
+  if (!timerInterval) return;
+  timerPaused = !timerPaused;
+  timerBar.classList.toggle('paused', timerPaused);
+  document.getElementById('timerLabel').textContent = timerPaused ? '⏸ Paused — tap to resume' : '⏱ Time';
 }
 
 function updateTimerUI() {
   const pct = (timerRemaining / selectedTimerSeconds) * 100;
-  const urgent = timerRemaining <= 10;
+  const urgent = timerRemaining <= 10 && !timerPaused;
   timerNumber.textContent = timerRemaining;
   timerNumber.classList.toggle('urgent', urgent);
   timerFill.style.width = pct + '%';
@@ -1477,6 +1543,8 @@ categoryModal.addEventListener('click', e => {
 
 // ── Challenge Modal ──
 challengeBtn.addEventListener('click', () => {
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  playChallengeBuzzer();
   const djIdx = activeDjIndex();
   const opts = document.getElementById('challengeOptions');
   const activePlayers = players.map((p,i) => ({...p, i})).filter(p => !p.eliminated);

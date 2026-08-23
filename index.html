@@ -1288,6 +1288,8 @@ namedItBtn.addEventListener('click', () => {
     showToast('Pick a category first!');
     return;
   }
+  if (advanceLocked) return;
+  clearTimeout(advanceTimeout);
   if (audioCtx.state === 'suspended') audioCtx.resume();
   advanceActivePlayer();
 });
@@ -1415,6 +1417,8 @@ let selectedTimerSeconds = 60;
 let timerInterval = null;
 let timerRemaining = TIMER_SECONDS;
 let timerPaused = false;
+let advanceTimeout = null;
+let advanceLocked = false;
 const timerBar    = document.getElementById('timerBar');
 timerBar.addEventListener('click', () => { if (audioCtx.state === 'suspended') audioCtx.resume(); togglePause(); });
 const timerNumber = document.getElementById('timerNumber');
@@ -1446,7 +1450,8 @@ function startTimer() {
           setTimeout(() => showToast(`${p.name} is eliminated!`), 2400);
         }
       }
-      setTimeout(advanceActivePlayer, 1200);
+      advanceTimeout = setTimeout(() => { advanceLocked = false; advanceActivePlayer(); }, 1200);
+      advanceLocked = true;
     } else {
       updateTimerUI();
     }
@@ -1506,6 +1511,8 @@ function advanceActivePlayer() {
 }
 
 function endRound() {
+  clearTimeout(advanceTimeout);
+  advanceLocked = false;
   resetTimer();
   currentCategory = '';
   currentDjIndex++;

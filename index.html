@@ -1559,18 +1559,24 @@ challengeBtn.addEventListener('click', () => {
     btn.addEventListener('click', () => {
       assignStrike(+btn.dataset.i);
       challengeModal.classList.remove('open');
+      if (timerPaused) togglePause();
     });
   });
 
   challengeModal.classList.add('open');
+  if (timerInterval && !timerPaused) togglePause();
 });
 
 document.getElementById('cancelChallenge').addEventListener('click', () => {
   challengeModal.classList.remove('open');
+  if (timerPaused) togglePause();
 });
 
 challengeModal.addEventListener('click', e => {
-  if (e.target === challengeModal) challengeModal.classList.remove('open');
+  if (e.target === challengeModal) {
+    challengeModal.classList.remove('open');
+    if (timerPaused) togglePause();
+  }
 });
 
 function assignStrike(playerIdx) {

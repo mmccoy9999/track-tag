@@ -1271,6 +1271,11 @@ function renderGame() {
         ${[0,1,2].map(s => `<div class="strike-dot ${s < p.strikes ? 'active' : ''}"></div>`).join('')}
       </div>
     </div>`).join('');
+
+  if (currentCategory) {
+    const activeEl = gamePlayerList.querySelector('.is-active-player');
+    if (activeEl) activeEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
 }
 
 categoryZone.addEventListener('click', () => {

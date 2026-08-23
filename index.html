@@ -393,6 +393,11 @@
     background: rgba(108,63,245,0.1);
   }
 
+  .game-player-item.is-active-player {
+    border-color: var(--go);
+    background: rgba(61,220,132,0.08);
+  }
+
   .game-player-item.eliminated {
     opacity: 0.35;
   }
@@ -524,6 +529,21 @@
     transition: opacity 0.15s;
   }
   .btn-next:active { opacity: 0.8; }
+
+  .btn-end-round {
+    width: 100%;
+    padding: 14px;
+    background: transparent;
+    color: var(--text-muted);
+    border: 1.5px solid var(--border);
+    border-radius: 16px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  .btn-end-round:active { opacity: 0.7; }
 
   /* ── MODALS ── */
   .modal-overlay {
@@ -872,8 +892,9 @@
   <div class="game-footer">
     <div class="btn-row">
       <button class="btn-challenge" id="challengeBtn">⚡ Challenge</button>
-      <button class="btn-next" id="nextBtn">Next Round →</button>
+      <button class="btn-next" id="namedItBtn">Named It ✓</button>
     </div>
+    <button class="btn-end-round" id="nextBtn">End Round →</button>
   </div>
 </div>
 
@@ -1111,6 +1132,7 @@ const CATEGORIES = [
 
 let players = [];       // { name, strikes, eliminated }
 let currentDjIndex = 0;
+let activePlayerIndex = 0;
 let currentCategory = '';
 let roundNumber = 1;
 let totalRounds = 0;
@@ -1131,6 +1153,7 @@ const categoryZone  = document.getElementById('categoryZone');
 const categoryDisplay = document.getElementById('categoryDisplay');
 const gamePlayerList  = document.getElementById('gamePlayerList');
 const challengeBtn  = document.getElementById('challengeBtn');
+const namedItBtn    = document.getElementById('namedItBtn');
 const nextBtn       = document.getElementById('nextBtn');
 const resetBtn      = document.getElementById('resetBtn');
 const categoryModal = document.getElementById('categoryModal');
@@ -1225,11 +1248,12 @@ function renderGame() {
   }
 
   gamePlayerList.innerHTML = players.map((p, i) => `
-    <div class="game-player-item ${i === djIdx ? 'is-dj' : ''} ${p.eliminated ? 'eliminated' : ''}">
+    <div class="game-player-item ${i === djIdx ? 'is-dj' : ''} ${p.eliminated ? 'eliminated' : ''} ${i === activePlayerIndex && currentCategory && !p.eliminated ? 'is-active-player' : ''}">
       <div class="game-player-avatar">${p.name[0].toUpperCase()}</div>
       <div class="game-player-info">
         <div class="game-player-name">${p.name}</div>
         ${i === djIdx ? '<div class="game-player-role">🎧 DJ this round</div>' : ''}
+        ${i === activePlayerIndex && currentCategory && !p.eliminated ? '<div class="game-player-role" style="color:var(--go)">▶ Name a song!</div>' : ''}
       </div>
       <div class="strike-dots">
         ${[0,1,2].map(s => `<div class="strike-dot ${s < p.strikes ? 'active' : ''}"></div>`).join('')}
@@ -1240,6 +1264,14 @@ function renderGame() {
 categoryZone.addEventListener('click', () => {
   if (categoryZone.classList.contains('has-category')) return;
   openCategoryModal();
+});
+
+namedItBtn.addEventListener('click', () => {
+  if (!currentCategory) {
+    showToast('Pick a category first!');
+    return;
+  }
+  advanceActivePlayer();
 });
 
 nextBtn.addEventListener('click', () => {
@@ -1364,7 +1396,17 @@ function startTimer() {
       timerRemaining = 0;
       updateTimerUI();
       stopTimer();
-      showToast("Time's up!");
+      // auto-strike the active player
+      const p = players[activePlayerIndex];
+      if (p && !p.eliminated) {
+        p.strikes++;
+        showToast(`⏱ Time's up! Strike for ${p.name}`);
+        if (p.strikes >= 3) {
+          p.eliminated = true;
+          showToast(`${p.name} is eliminated!`);
+        }
+      }
+      advanceActivePlayer();
     } else {
       updateTimerUI();
     }
@@ -1391,9 +1433,31 @@ function updateTimerUI() {
   timerFill.classList.toggle('urgent', urgent);
 }
 
+function advanceActivePlayer() {
+  const total = players.length;
+  let next = (activePlayerIndex + 1) % total;
+  let attempts = 0;
+  while (players[next].eliminated && attempts < total) {
+    next = (next + 1) % total;
+    attempts++;
+  }
+  activePlayerIndex = next;
+  renderGame();
+  startTimer();
+}
+
 function selectCategory(cat) {
   currentCategory = cat;
   categoryModal.classList.remove('open');
+  // start from player after DJ
+  const djIdx = activeDjIndex();
+  let first = (djIdx + 1) % players.length;
+  let attempts = 0;
+  while (players[first].eliminated && attempts < players.length) {
+    first = (first + 1) % players.length;
+    attempts++;
+  }
+  activePlayerIndex = first;
   renderGame();
   startTimer();
 }

@@ -191,6 +191,41 @@
     padding: 24px 0;
   }
 
+  .timer-option {
+    padding: 0 20px 16px;
+    flex-shrink: 0;
+  }
+  .timer-option-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--label);
+    margin-bottom: 10px;
+  }
+  .timer-chips {
+    display: flex;
+    gap: 8px;
+  }
+  .timer-chip {
+    flex: 1;
+    padding: 10px 0;
+    border-radius: 12px;
+    border: 1.5px solid var(--border);
+    background: var(--surface);
+    color: var(--text-muted);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .timer-chip.active {
+    background: var(--accent-dim);
+    border-color: var(--accent);
+    color: var(--text);
+  }
+
   .setup-footer {
     padding: 16px 20px 32px;
     flex-shrink: 0;
@@ -408,6 +443,47 @@
     transition: background 0.25s;
   }
   .strike-dot.active { background: var(--strike-active); }
+
+  /* ── TIMER ── */
+  .timer-bar {
+    margin: 0 20px;
+    flex-shrink: 0;
+  }
+  .timer-display {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+  }
+  .timer-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--label);
+  }
+  .timer-number {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 28px;
+    letter-spacing: 2px;
+    color: var(--go);
+    transition: color 0.3s;
+    font-variant-numeric: tabular-nums;
+  }
+  .timer-number.urgent { color: var(--danger); }
+  .timer-track {
+    height: 6px;
+    background: var(--surface2);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .timer-fill {
+    height: 100%;
+    background: var(--go);
+    border-radius: 3px;
+    transition: width 0.9s linear, background 0.3s;
+  }
+  .timer-fill.urgent { background: var(--danger); }
 
   .game-footer {
     padding: 12px 20px 32px;
@@ -746,6 +822,16 @@
     </div>
   </div>
 
+  <div class="timer-option">
+    <div class="timer-option-label">⏱ Turn Timer</div>
+    <div class="timer-chips">
+      <button class="timer-chip" data-val="0">Off</button>
+      <button class="timer-chip" data-val="45">45s</button>
+      <button class="timer-chip active" data-val="60">60s</button>
+      <button class="timer-chip" data-val="90">90s</button>
+    </div>
+  </div>
+
   <div class="setup-footer">
     <button class="btn-primary" id="startGameBtn" disabled>START GAME</button>
   </div>
@@ -766,6 +852,16 @@
   <div class="category-zone no-category" id="categoryZone">
     <div class="category-eyebrow">CATEGORY</div>
     <div class="category-text" id="categoryDisplay">Tap to pick</div>
+  </div>
+
+  <div class="timer-bar" id="timerBar" style="display:none">
+    <div class="timer-display">
+      <span class="timer-label">⏱ Time</span>
+      <span class="timer-number" id="timerNumber">30</span>
+    </div>
+    <div class="timer-track">
+      <div class="timer-fill" id="timerFill" style="width:100%"></div>
+    </div>
   </div>
 
   <div class="players-section">
@@ -1077,6 +1173,14 @@ function addPlayer() {
 
 addPlayerBtn.addEventListener('click', addPlayer);
 addPlayerBtn.addEventListener('touchend', e => { e.preventDefault(); addPlayer(); });
+
+document.querySelectorAll('.timer-chip').forEach(chip => {
+  chip.addEventListener('click', () => {
+    document.querySelectorAll('.timer-chip').forEach(c => c.classList.remove('active'));
+    chip.classList.add('active');
+    selectedTimerSeconds = parseInt(chip.dataset.val);
+  });
+});
 playerInput.addEventListener('keydown', e => { if (e.key === 'Enter') addPlayer(); });
 
 startGameBtn.addEventListener('click', () => {
@@ -1143,6 +1247,7 @@ nextBtn.addEventListener('click', () => {
     showToast('Pick a category first!');
     return;
   }
+  resetTimer();
   // advance to next non-eliminated DJ
   currentCategory = '';
   currentDjIndex++;
@@ -1170,6 +1275,7 @@ document.getElementById('confirmNo').addEventListener('click', () => confirmModa
 confirmModal.addEventListener('click', e => { if (e.target === confirmModal) confirmModal.classList.remove('open'); });
 document.getElementById('confirmYes').addEventListener('click', () => {
   confirmModal.classList.remove('open');
+  resetTimer();
   players.forEach(p => { p.strikes = 0; p.eliminated = false; });
   currentDjIndex = 0;
   roundNumber = 1;
@@ -1237,10 +1343,59 @@ function openCategoryModal() {
   categoryModal.classList.add('open');
 }
 
+// ── Timer ──
+const TIMER_SECONDS = 30;
+let selectedTimerSeconds = 60;
+let timerInterval = null;
+let timerRemaining = TIMER_SECONDS;
+const timerBar    = document.getElementById('timerBar');
+const timerNumber = document.getElementById('timerNumber');
+const timerFill   = document.getElementById('timerFill');
+
+function startTimer() {
+  if (selectedTimerSeconds === 0) return;
+  stopTimer();
+  timerRemaining = selectedTimerSeconds;
+  timerBar.style.display = 'block';
+  updateTimerUI();
+  timerInterval = setInterval(() => {
+    timerRemaining--;
+    if (timerRemaining <= 0) {
+      timerRemaining = 0;
+      updateTimerUI();
+      stopTimer();
+      showToast("Time's up!");
+    } else {
+      updateTimerUI();
+    }
+  }, 1000);
+}
+
+function stopTimer() {
+  clearInterval(timerInterval);
+  timerInterval = null;
+}
+
+function resetTimer() {
+  stopTimer();
+  timerBar.style.display = 'none';
+  timerRemaining = TIMER_SECONDS;
+}
+
+function updateTimerUI() {
+  const pct = (timerRemaining / selectedTimerSeconds) * 100;
+  const urgent = timerRemaining <= 10;
+  timerNumber.textContent = timerRemaining;
+  timerNumber.classList.toggle('urgent', urgent);
+  timerFill.style.width = pct + '%';
+  timerFill.classList.toggle('urgent', urgent);
+}
+
 function selectCategory(cat) {
   currentCategory = cat;
   categoryModal.classList.remove('open');
   renderGame();
+  startTimer();
 }
 
 categoryModal.addEventListener('click', e => {
